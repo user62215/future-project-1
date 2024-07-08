@@ -1,0 +1,89 @@
+#include <SPI.h>
+#include <LoRa.h>
+#include  <Adafruit_BMP280.h>
+#include <TinyGPS++.h>
+#include <SoftwareSerial.h>
+
+Adafruit_BMP280 bmp; // I2C Interface
+const uint32_t GPSBaud = 9600; //Default baud of NEO-6M is 9600
+
+int counter = 0;
+TinyGPSPlus gps; // the TinyGPS++ object
+SoftwareSerial gpsSerial(3, 4); // the serial interface to the GPS device
+
+void setup() {
+  Serial.begin(9600);
+  gpsSerial.begin(GPSBaud);
+  while (!Serial);
+
+  Serial.println("LoRa Sender");
+
+  if (!LoRa.begin(433E6)) {
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
+  
+
+  if  (!bmp.begin(0x76)) {
+    Serial.println(F("Could not find a valid BMP280 sensor,  check wiring!"));
+    while (1);
+  }
+
+  /* Default settings from datasheet.  */
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_500);  /* Standby time. */
+}
+
+void loop() {
+   if (gpsSerial.available() > 0) {
+    if (gps.encode(gpsSerial.read())) {
+      if (gps.location.isValid()) {
+        double latitude = gps.location.lat();
+        double longitude = gps.location.lng();
+
+  Serial.print("Sending packet: ");
+  Serial.println(counter);
+
+  // send packet
+    LoRa.beginPacket();
+    LoRa.print("number of packet ");
+    LoRa.print(counter);
+
+    LoRa.print("          ");
+
+    LoRa.print(F("Temperature  = "));
+    LoRa.print(bmp.readTemperature());
+    LoRa.print(" C");
+
+    LoRa.print("          ");
+
+    LoRa.print(F("Pressure = "));
+    LoRa.print(bmp.readPressure()/100);  //displaying the Pressure in hPa, you can change the unit
+    LoRa.print("  hPa");
+
+    LoRa.print("          ");
+
+    LoRa.print(F("altitude = "));
+    LoRa.print(bmp.readAltitude(1019.66));  //The "1019.66" is the pressure(hPa) at sea level in day in your region
+    LoRa.print("  m");                    //If you don't know it, modify it until you get your current  altitude
+    LoRa.print("          ");
+    LoRa.print(latitude, 6);
+    //Serial.print(latitude, 6);//
+    LoRa.print(" , ");
+    //Serial.print(" , ");//
+    LoRa.print(longitude, 6);
+    //Serial.print(longitude, 6);//
+
+    LoRa.endPacket();
+    counter++;
+    
+  
+      }
+      }
+      }  
+      
+      
+}
